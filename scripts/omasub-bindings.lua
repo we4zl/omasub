@@ -1,0 +1,13 @@
+-- Prefer a live Omasub session, then fall back to Omarchy's media source.
+hl.unbind("XF86AudioNext")
+hl.unbind("ALT + XF86AudioPlay")
+hl.unbind("XF86AudioPause")
+hl.unbind("XF86AudioPlay")
+hl.unbind("XF86AudioPrev")
+hl.unbind("ALT + SHIFT + XF86AudioPlay")
+o.bind("XF86AudioNext", "Next track", "omasub-media-key next", { locked = true })
+o.bind("ALT + XF86AudioPlay", "Next track", "omasub-media-key next", { locked = true })
+o.bind("XF86AudioPause", "Play/pause", "omasub-media-key toggle", { locked = true })
+o.bind("XF86AudioPlay", "Play/pause", "omasub-media-key toggle", { locked = true })
+o.bind("XF86AudioPrev", "Previous track", "omasub-media-key previous", { locked = true })
+o.bind("ALT + SHIFT + XF86AudioPlay", "Previous track", "omasub-media-key previous", { locked = true })

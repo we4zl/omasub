@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.bprendie.omasub",
+  "name": "Omasub",
+  "version": "1.0.0",
+  "author": "Bob Prendergast",
+  "license": "MIT",
+  "description": "Playback status and remote controls for the Omasub Subsonic client.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "widget/omasub/BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omasub",
+    "description": "Now playing and remote controls for Omasub",
+    "category": "Media",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

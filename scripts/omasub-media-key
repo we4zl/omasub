@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+action=${1:-}
+case "$action" in
+  toggle|next|previous) ;;
+  *) echo "usage: omasub-media-key <toggle|next|previous>" >&2; exit 2 ;;
+esac
+
+if omasub remote status >/dev/null 2>&1; then
+  exec omasub remote "$action"
+fi
+
+case "$action" in
+  toggle) exec omarchy-shell media playPause ;;
+  next) exec omarchy-shell media next ;;
+  previous) exec omarchy-shell media previous ;;
+esac

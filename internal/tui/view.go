@@ -1,0 +1,173 @@
+package tui
+
+import (
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+)
+
+func (m Model) View() string {
+	contentWidth := max(20, m.width-4)
+	if m.mode == modeSetup || m.isLLMConfigMode() || m.isCuratorInputMode() || m.mode == modePlaylistDelete || m.mode == modeVault {
+		var b strings.Builder
+		if contentWidth >= maxLineWidth(logo) {
+			b.WriteString("\n" + renderLogo(logo, contentWidth))
+		} else {
+			b.WriteString(m.styles.header.Render("Omasub"))
+		}
+		b.WriteString("\n\n")
+		if m.mode == modeVault {
+			b.WriteString(m.vaultView(contentWidth))
+		} else if m.isLLMConfigMode() {
+			b.WriteString(m.llmConfigView(contentWidth))
+		} else if m.isCuratorInputMode() {
+			b.WriteString(m.curatorInputView(contentWidth))
+		} else if m.mode == modePlaylistDelete {
+			b.WriteString(m.playlistDeleteView(contentWidth))
+		} else {
+			b.WriteString(m.setupView(contentWidth))
+		}
+		return m.styles.frame.Render(b.String())
+	}
+	return m.styles.frame.Render(m.appShell(contentWidth))
+}
+
+func (m Model) appShell(width int) string {
+	var b strings.Builder
+	header := m.appHeader(width)
+	footer := m.footer(width)
+	innerHeight := max(6, m.height-2)
+	bodyRenderedHeight := innerHeight - lipgloss.Height(header) - lipgloss.Height(footer) - 2
+	bodyRenderedHeight = max(4, bodyRenderedHeight)
+	bodyHeight := max(2, bodyRenderedHeight-2)
+	body := ""
+	if m.helpOpen {
+		m.list.SetSize(width, max(2, bodyHeight))
+		body = m.fullHelpPopup(width, bodyHeight)
+	} else if width < 64 {
+		m.list.SetSize(width, max(2, bodyHeight))
+		body = m.mainListPane(width, bodyHeight)
+	} else {
+		sidebarWidth := clampInt(width/4, 20, 30)
+		mainWidth := max(24, width-sidebarWidth-2)
+		m.list.SetSize(mainWidth, max(2, bodyHeight))
+		sidebar := m.sidebar(sidebarWidth, bodyHeight)
+		main := m.mainListPane(mainWidth, bodyHeight)
+		body = lipgloss.JoinHorizontal(lipgloss.Top, sidebar, main)
+	}
+	b.WriteString(header)
+	b.WriteString("\n")
+	b.WriteString(body)
+	b.WriteString("\n")
+	b.WriteString(footer)
+	if !m.cfg.Ready() {
+		b.WriteString("\n" + m.styles.error.Render("set OMASUB_USER and OMASUB_PASSWORD or edit config.json"))
+	}
+	return b.String()
+}
+
+func (m Model) mainListPane(width, height int) string {
+	content := m.list.View()
+	style := m.styles.active
+	if m.focus == focusSidebar {
+		style = m.styles.panel
+	}
+	return style.Width(width).Height(height).Render(content)
+}
+
+func (m Model) footer(width int) string {
+	if width < 64 {
+		return lipgloss.JoinVertical(lipgloss.Left, m.playBar(width), m.statusLine(), m.styles.help.Render(m.helpMenu(width)))
+	}
+	artWidth := 18
+	visualWidth := max(18, width/4)
+	playerWidth := max(20, width-artWidth-visualWidth-4)
+	art := m.coverPanel(artWidth, squareCoverPanelHeight(artWidth))
+	viz := m.styles.panel.Width(visualWidth).Height(5).Render(m.visualizer.View(m.styles))
+	player := m.playBar(playerWidth)
+	status := m.statusLine()
+	help := m.styles.help.Render(m.helpMenu(width))
+	top := lipgloss.JoinHorizontal(lipgloss.Top, art, viz, player)
+	return lipgloss.JoinVertical(lipgloss.Left, top, status, help)
+}
+
+func (m Model) statusLine() string {
+	if strings.TrimSpace(m.err) != "" {
+		return m.styles.error.Render(ansi.Wordwrap("error: "+m.err, max(20, m.width-6), " /_-"))
+	}
+	if m.searching || m.curating {
+		status := m.status
+		if m.curating {
+			status = strings.TrimSpace(m.status)
+			if status == "" {
+				status = "curating"
+			}
+			status += " / " + m.curatorPhrase()
+		}
+		return m.styles.status.Render(m.spinner.View() + " " + ansi.Wordwrap(status, max(20, m.width-6), " /_-"))
+	}
+	if m.isPlaying() {
+		state := "now: "
+		if m.paused {
+			state = "paused: "
+		}
+		meter := " " + meterBadge("SYNTH", warning)
+		if m.energy.Live {
+			meter = " " + meterBadge("LIVE", success)
+		}
+		return m.styles.status.Render(ansi.Wordwrap(state+m.playingLabel()+meter, max(20, m.width-4), " /_-"))
+	}
+	return m.styles.status.Render(ansi.Wordwrap(m.status, max(20, m.width-4), " /_-"))
+}
+
+var curatorPhrases = []string{
+	"sniffing_the_new_bin",
+	"protecting_the_vibe",
+	"checking_the_back_nine",
+	"weeding_ghost_tracks",
+	"rejecting_taxable_transitions",
+	"sequencing_the_deep_cuts",
+	"wheezing_the_playlist",
+}
+
+func (m Model) curatorPhrase() string {
+	if len(curatorPhrases) == 0 || m.curatorStarted.IsZero() {
+		return "curating_the_playlist"
+	}
+	phase := min(2, int(time.Since(m.curatorStarted)/(20*time.Second)))
+	start := int((m.curatorStarted.UnixNano() / int64(time.Millisecond)) % int64(len(curatorPhrases)))
+	return curatorPhrases[(start+phase)%len(curatorPhrases)]
+}
+
+func meterBadge(label string, color lipgloss.Color) string {
+	return lipgloss.NewStyle().
+		Foreground(color).
+		Border(lipgloss.NormalBorder(), false, true, false, true).
+		BorderForeground(secondary).
+		Padding(0, 1).
+		Render(label)
+}
+
+func tick() tea.Cmd {
+	return tea.Tick(time.Second/30, func(t time.Time) tea.Msg { return tickMsg(t) })
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func clampInt(v, low, high int) int {
+	if v < low {
+		return low
+	}
+	if v > high {
+		return high
+	}
+	return v
+}
