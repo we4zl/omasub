@@ -169,10 +169,23 @@ permissions to:
 ~/.config/omasub/config.json
 ```
 
+### Your music server can be shared. Your listening life doesn't have to be.
+
+Omasub's encrypted local vault creates a private layer over Navidrome.
+Playlists, history, queues, recommendations, and agent-curated mixes can remain
+yours alone—even when the underlying server belongs to a household, family, or
+community.
+
+Nothing leaves the vault by accident. When you want to share a playlist, you
+publish it to the server deliberately. Until then, it stays local, encrypted,
+and under your control.
+
+The vault is not an account and it is not a cloud service. There is no recovery
+desk, telemetry pipeline, or platform operator holding another copy. It is your
+space, on your machine, unlocked only for your listening session.
+
 The encrypted SQLite vault lives under the platform data directory as
-`omasub/vault.sqlite3`. There is no account-recovery desk and no cloud copy
-waiting behind the scenes. Back up the vault and keep the password somewhere
-safe.
+`omasub/vault.sqlite3`. Back up the vault and keep the password somewhere safe.
 
 Environment variables can override the saved connection:
 
