@@ -21,6 +21,12 @@ func TestPlaybackModeIsAValidCommand(t *testing.T) {
 	}
 }
 
+func TestVisibilityCommandsAreValid(t *testing.T) {
+	if !validCommand(Visible) || !validCommand(Hidden) {
+		t.Fatal("visibility commands should be accepted by the remote transport")
+	}
+}
+
 func TestSnapshotRoundTripUsesPrivateAtomicFile(t *testing.T) {
 	stateHome := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", stateHome)

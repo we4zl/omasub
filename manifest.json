@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.bprendie.omasub",
   "name": "Omasub",
-  "version": "1.0.0",
+  "version": "1.7.0",
   "author": "Bob Prendergast",
   "license": "MIT",
   "description": "Playback status and remote controls for the Omasub Subsonic client.",

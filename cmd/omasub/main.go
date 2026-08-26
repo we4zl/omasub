@@ -9,12 +9,13 @@ import (
 	"strings"
 
 	"github.com/bprendie/omasub/internal/config"
+	"github.com/bprendie/omasub/internal/mpris"
 	"github.com/bprendie/omasub/internal/remote"
 	"github.com/bprendie/omasub/internal/tui"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const appVersion = "1.0.0"
+const appVersion = "1.7.0"
 
 func main() {
 	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "version") {
@@ -42,8 +43,20 @@ func main() {
 	}
 
 	model := tui.New(cfg)
+	var p *tea.Program
+	media, mediaErr := mpris.Start(func(command remote.Command) {
+		if p != nil {
+			p.Send(command)
+		}
+	})
+	if mediaErr != nil {
+		fmt.Fprintf(os.Stderr, "omasub: MPRIS unavailable: %v\n", mediaErr)
+	} else {
+		defer media.Close()
+		model.SetMediaPublisher(media)
+	}
 	model.EnableRemote()
-	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p = tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	server, err := remote.Listen(func(command remote.Command) { p.Send(command) })
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "omasub: %v\n", err)
@@ -59,7 +72,7 @@ func main() {
 
 func runRemote(args []string) error {
 	if len(args) != 1 {
-		return fmt.Errorf("usage: omasub remote <status|toggle|next|previous|stop|mode|quit>")
+		return fmt.Errorf("usage: omasub remote <status|toggle|next|previous|stop|mode|quit|visible|hidden>")
 	}
 	if args[0] == "status" {
 		snapshot, err := remote.ReadSnapshot()
@@ -76,9 +89,11 @@ func runRemote(args []string) error {
 	commands := map[string]remote.Command{
 		"toggle": remote.Toggle, "play-pause": remote.Toggle,
 		"next": remote.Next, "previous": remote.Previous, "prev": remote.Previous,
-		"stop": remote.Stop,
-		"mode": remote.CycleMode,
-		"quit": remote.Quit,
+		"stop":    remote.Stop,
+		"mode":    remote.CycleMode,
+		"quit":    remote.Quit,
+		"visible": remote.Visible,
+		"hidden":  remote.Hidden,
 	}
 	command, ok := commands[args[0]]
 	if !ok {

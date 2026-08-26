@@ -14,9 +14,10 @@ under their own control.
 
 The interface belongs on your desktop: it follows the selected Omarchy theme,
 including live theme changes, and keeps its title gradient inside that palette.
-`mpv` handles playback, `ffmpeg` drives the visualizer, and album art renders
-directly in the terminal. Your server supplies the music. Your machine keeps the
-memory.
+`mpv` owns the audio stream and decoding. The low-power Harmonica visualizer
+stays inside the TUI without opening a second network stream or decoder, and
+album art renders directly in the terminal. Your server supplies the music.
+Your machine keeps the memory.
 
 ```text
 ________                   _________    ________
@@ -33,7 +34,7 @@ ________                   _________    ________
   server—without an algorithmic storefront in the way.
 - Streams through `mpv` with play/pause, next/previous, queue editing, shuffle,
   shuffle/repeat, repeat-all, and repeat-one modes.
-- Renders square pixel-art covers and a live audio visualizer in the TUI.
+- Renders square pixel-art covers and a low-power visualizer in the TUI.
 - Encrypts play history, queue snapshots, cached metadata, private playlists,
   recommendation recipes, and curator runs in a local SQLite vault.
 - Syncs the Subsonic cache automatically after the first vault unlock so search
@@ -61,6 +62,12 @@ persistent listening session. Closing the terminal detaches the interface while
 playback, queue state, and the unlocked vault remain alive. Opening Omasub from
 the widget restores and focuses that same session.
 
+The widget is a passive MPRIS client. It subscribes to native desktop media
+events instead of polling or launching a status command every second. Detached,
+paused, and idle sessions fall back to a one-hertz clock; a detached idle
+session wakes only every 30 seconds, and the visible visualizer tops out at 15
+Hz.
+
 ![Omasub Omarchy shell widget](omasub_widget.png)
 
 The widget provides one-click access to:
@@ -80,7 +87,6 @@ keys, `Alt+Play` advances and `Alt+Shift+Play` goes back.
 
 - Go 1.25 or newer
 - `mpv` for playback
-- `ffmpeg` for the reactive visualizer
 - A C compiler for SQLite
 - A Navidrome or Subsonic-compatible server
 - Omarchy for live theme, default-agent, widget, terminal-session, and media-key
@@ -278,10 +284,11 @@ transitions. Browsing a different playlist is left undisturbed.
 
 ## Remote Control
 
-The running TUI owns a private Unix socket and publishes a minimal atomic status
-snapshot under the XDG state directory. The snapshot contains playback display
-data only; credentials, vault contents, playlists, and curator prompts are never
-exposed.
+The running TUI owns a private Unix socket and publishes a minimal atomic
+diagnostic snapshot under the XDG state directory. The snapshot contains
+playback display data only; credentials, vault contents, playlists, and curator
+prompts are never exposed. Standard desktop playback and widget state use
+MPRIS; Omasub-specific mode and secure-quit actions use the private wire.
 
 ```sh
 omasub remote status
@@ -293,8 +300,7 @@ omasub remote mode
 omasub remote quit
 ```
 
-The widget and media-key helper use this same bridge, so every controller acts
-on one player and one queue.
+Every controller still acts on one player and one queue.
 
 ## Your Music Leaves on Your Terms
 

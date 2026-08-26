@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-# Omarchy shell processes may intentionally set NO_COLOR for command output.
-# Omasub is a themed TUI, so do not pass that flag into its listening session.
+# Omarchy shell may set NO_COLOR for command output. Omasub is a themed TUI.
 unset NO_COLOR
+OMASUB_BIN=${1:-${OMASUB_BIN:-"$HOME/.local/bin/omasub"}}
 
 focus_omasub() {
   local client_pid terminal_pid address
@@ -21,8 +21,19 @@ focus_omasub() {
   return 1
 }
 
+configure_visibility_hooks() {
+  local bin_q
+  printf -v bin_q '%q' "$OMASUB_BIN"
+  tmux set-hook -t omasub client-attached "run-shell '$bin_q remote visible >/dev/null 2>&1'"
+  tmux set-hook -t omasub client-detached "run-shell '$bin_q remote hidden >/dev/null 2>&1'"
+}
+
+if tmux has-session -t omasub 2>/dev/null; then
+  configure_visibility_hooks
+fi
+
 attached=$(tmux display-message -p -t omasub '#{session_attached}' 2>/dev/null || printf '0')
-if [[ $attached != 0 ]] && omasub remote status 2>/dev/null | jq -e '.running == true' >/dev/null; then
+if [[ $attached != 0 ]] && "$OMASUB_BIN" remote status 2>/dev/null | jq -e '.running == true' >/dev/null; then
   if focus_omasub; then
     exit 0
   fi
@@ -31,17 +42,19 @@ fi
 if tmux has-session -t omasub 2>/dev/null; then
   terminal_args=(tmux attach-session -t omasub)
 else
-  terminal_args=(tmux new-session -s omasub env -u NO_COLOR omasub)
+  tmux new-session -d -s omasub env -u NO_COLOR "$OMASUB_BIN"
+  terminal_args=(tmux attach-session -t omasub)
 fi
+
+configure_visibility_hooks
 
 omarchy-launch-tui --app-id=org.omarchy.omasub "${terminal_args[@]}" >/dev/null 2>&1 &
 
 for _ in {1..30}; do
   attached=$(tmux display-message -p -t omasub '#{session_attached}' 2>/dev/null || printf '0')
-  if [[ $attached != 0 ]]; then
-    if focus_omasub; then
-      exit 0
-    fi
+  if [[ $attached != 0 ]] && focus_omasub; then
+    "$OMASUB_BIN" remote visible >/dev/null 2>&1 || true
+    exit 0
   fi
   sleep 0.1
 done

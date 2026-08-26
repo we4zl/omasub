@@ -18,7 +18,7 @@ control and status display for a running Omasub process.
 ## Non-Negotiable Constraints
 
 - Preserve behavior unless a change is explicitly listed in this plan.
-- Keep Bubble Tea, Bubbles, Lip Gloss, mpv, ffmpeg, SQLite, the encrypted vault,
+- Keep Bubble Tea, Bubbles, Lip Gloss, mpv, SQLite, the encrypted vault,
   Subsonic/Navidrome support, and the existing curator safeguards.
 - First-party source files must not exceed 300 lines. Split by responsibility,
   not by arbitrary line ranges.

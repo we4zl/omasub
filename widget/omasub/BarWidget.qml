@@ -1,33 +1,76 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.Mpris
 import qs.Commons
 import qs.Ui
-import "Model.js" as Model
 
 BarWidget {
   id: root
   moduleName: "io.github.bprendie.omasub"
 
-  property var status: Model.emptyStatus()
   property bool popupOpen: false
   readonly property bool opened: popupOpen
   readonly property bool popoutSwitchClosing: false
-  readonly property bool active: status.running === true
-  readonly property bool playing: active && status.state === "playing"
-  readonly property bool paused: active && status.state === "paused"
+  readonly property var players: Mpris.players ? Mpris.players.values : []
+  readonly property var player: findOmasubPlayer()
+  readonly property bool active: player !== null
+  readonly property bool playing: active && player.isPlaying
+  readonly property bool paused: active && !playing && player.trackTitle !== ""
   readonly property string vuIcon: "󰺢"
   readonly property string stateIcon: playing ? "󰏤" : (paused ? "󰐊" : "󰓛")
-  readonly property string tooltipText: Model.trackLabel(status)
+  readonly property string tooltipText: trackLabel()
+  readonly property string home: Quickshell.env("HOME") || ""
+  readonly property string defaultOmasubBin: home + "/.local/bin/omasub"
+  readonly property string omasubBin: settings && String(settings.binaryPath || "") !== ""
+    ? String(settings.binaryPath) : defaultOmasubBin
   readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")
 
-  function refresh() {
-    if (!statusProc.running) statusProc.running = true
+  function findOmasubPlayer() {
+    for (var i = 0; i < players.length; i++) {
+      var candidate = players[i]
+      var name = String(candidate && candidate.dbusName || "").toLowerCase()
+      var identity = String(candidate && candidate.identity || "").toLowerCase()
+      var desktop = String(candidate && candidate.desktopEntry || "").toLowerCase()
+      if (name === "org.mpris.mediaplayer2.omasub" || identity === "omasub" || desktop === "omasub")
+        return candidate
+    }
+    return null
+  }
+
+  function stateLabel() {
+    if (!active) return "Omasub is not running"
+    if (playing) return "Playing"
+    if (paused) return "Paused"
+    return "Idle"
+  }
+
+  function trackLabel() {
+    if (!active || !player.trackTitle) return stateLabel()
+    return player.trackArtist ? player.trackTitle + " — " + player.trackArtist : player.trackTitle
+  }
+
+  function playbackModeLabel() {
+    if (!active) return "off"
+    var repeats = player.loopState === MprisLoopState.Playlist
+    if (player.shuffle && repeats) return "shuffle/repeat"
+    if (player.shuffle) return "shuffle"
+    return repeats ? "repeat" : "off"
+  }
+
+  function runPlayback(action) {
+    if (!player) return
+    if (action === "previous" && player.canGoPrevious) player.previous()
+    else if (action === "next" && player.canGoNext) player.next()
+    else if (action === "toggle" && player.canTogglePlaying) player.togglePlaying()
+    else if (action === "toggle" && player.isPlaying && player.canPause) player.pause()
+    else if (action === "toggle" && !player.isPlaying && player.canPlay) player.play()
+    else if (action === "stop" && player.canControl) player.stop()
   }
 
   function runRemote(action) {
     if (actionProc.running) return
-    actionProc.command = ["omasub", "remote", action]
+    actionProc.command = [root.omasubBin, "remote", action]
     actionProc.running = true
   }
 
@@ -35,21 +78,10 @@ BarWidget {
     if (!launchProc.running) launchProc.running = true
   }
 
-  function close() {
-    popupOpen = false
-  }
-
-  function open() {
-    popupOpen = true
-  }
-
-  function toggle() {
-    popupOpen = !popupOpen
-  }
-
-  function closeForPopoutSwitch() {
-    close()
-  }
+  function close() { popupOpen = false }
+  function open() { popupOpen = true }
+  function toggle() { popupOpen = !popupOpen }
+  function closeForPopoutSwitch() { close() }
 
   function openOmasub() {
     close()
@@ -60,33 +92,12 @@ BarWidget {
   implicitHeight: barSize
 
   Process {
-    id: statusProc
-    command: ["omasub", "remote", "status"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: root.status = Model.parseStatus(text)
-    }
-    onExited: function(exitCode) {
-      if (exitCode !== 0) root.status = Model.emptyStatus()
-    }
-  }
-
-  Process {
     id: actionProc
-    onExited: root.refresh()
   }
 
   Process {
     id: launchProc
-    command: [root.configHome + "/omarchy/plugins/io.github.bprendie.omasub/widget/omasub/launch.sh"]
-  }
-
-  Timer {
-    interval: 1000
-    running: true
-    repeat: true
-    triggeredOnStart: true
-    onTriggered: root.refresh()
+    command: [root.configHome + "/omarchy/plugins/io.github.bprendie.omasub/widget/omasub/launch.sh", root.omasubBin]
   }
 
   Row {
@@ -95,26 +106,19 @@ BarWidget {
     spacing: Style.space(6)
 
     Text {
-      id: glyph
       anchors.verticalCenter: parent.verticalCenter
       text: root.vuIcon
       color: root.active ? root.bar.barForeground : Qt.darker(root.bar.barForeground, 1.55)
       font.family: "CaskaydiaMono Nerd Font"
       font.pixelSize: Style.font.icon
 
-      SequentialAnimation on opacity {
-        running: root.playing
-        loops: Animation.Infinite
-        NumberAnimation { to: 0.55; duration: 420; easing.type: Easing.InOutQuad }
-        NumberAnimation { to: 1.0; duration: 420; easing.type: Easing.InOutQuad }
-      }
     }
 
     Text {
       anchors.verticalCenter: parent.verticalCenter
-      visible: !root.bar.vertical && root.status.title !== ""
+      visible: !root.bar.vertical && root.active && root.player.trackTitle !== ""
       width: Math.min(180, implicitWidth)
-      text: root.status.title
+      text: root.active ? root.player.trackTitle : ""
       color: root.bar.barForeground
       font.family: root.bar.fontFamily
       font.pixelSize: Style.font.body
@@ -128,13 +132,13 @@ BarWidget {
     cursorShape: Qt.PointingHandCursor
     acceptedButtons: Qt.LeftButton | Qt.MiddleButton
     onClicked: function(mouse) {
-      if (mouse.button === Qt.MiddleButton && root.active) root.runRemote("next")
+      if (mouse.button === Qt.MiddleButton && root.active) root.runPlayback("next")
       else if (root.active) root.toggle()
       else root.launch()
     }
     onWheel: function(wheel) {
       if (!root.active) return
-      root.runRemote(wheel.angleDelta.y > 0 ? "previous" : "next")
+      root.runPlayback(wheel.angleDelta.y > 0 ? "previous" : "next")
     }
     onEntered: if (root.bar) root.bar.showTooltip(root, root.tooltipText)
     onExited: if (root.bar) root.bar.hideTooltip(root)
@@ -180,7 +184,7 @@ BarWidget {
 
           Text {
             width: parent.width
-            text: root.status.title || "Omasub"
+            text: root.active && root.player.trackTitle ? root.player.trackTitle : "Omasub"
             color: root.bar.foreground
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.subtitle
@@ -189,7 +193,7 @@ BarWidget {
           }
           Text {
             width: parent.width
-            text: root.status.artist || Model.stateLabel(root.status)
+            text: root.active && root.player.trackArtist ? root.player.trackArtist : root.stateLabel()
             color: Qt.darker(root.bar.foreground, 1.3)
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.bodySmall
@@ -198,7 +202,7 @@ BarWidget {
           Text {
             width: parent.width
             visible: text !== ""
-            text: root.status.album
+            text: root.active ? root.player.trackAlbum : ""
             color: Qt.darker(root.bar.foreground, 1.6)
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.caption
@@ -214,31 +218,31 @@ BarWidget {
         Button {
           iconText: "󰒮"
           foreground: root.bar.foreground
-          enabled: root.active
+          enabled: root.active && root.player.canGoPrevious
           opacity: enabled ? 1.0 : 0.4
-          onClicked: root.runRemote("previous")
+          onClicked: root.runPlayback("previous")
         }
         Button {
           iconText: root.stateIcon
           foreground: root.bar.foreground
           iconSize: Style.font.iconLarge
-          enabled: root.active
+          enabled: root.active && (root.player.canTogglePlaying || root.player.canPlay || root.player.canPause)
           opacity: enabled ? 1.0 : 0.4
-          onClicked: root.runRemote("toggle")
+          onClicked: root.runPlayback("toggle")
         }
         Button {
           iconText: "󰒭"
           foreground: root.bar.foreground
-          enabled: root.active
+          enabled: root.active && root.player.canGoNext
           opacity: enabled ? 1.0 : 0.4
-          onClicked: root.runRemote("next")
+          onClicked: root.runPlayback("next")
         }
         Button {
           iconText: "󰓛"
           foreground: root.bar.foreground
-          enabled: root.active
+          enabled: root.active && root.player.canControl && root.player.trackTitle !== ""
           opacity: enabled ? 1.0 : 0.4
-          onClicked: root.runRemote("stop")
+          onClicked: root.runPlayback("stop")
         }
       }
 
@@ -251,7 +255,7 @@ BarWidget {
 
       Button {
         anchors.horizontalCenter: parent.horizontalCenter
-        text: "Mode: " + root.status.playback_mode
+        text: "Mode: " + root.playbackModeLabel()
         foreground: root.bar.foreground
         enabled: root.active
         opacity: enabled ? 1.0 : 0.4
