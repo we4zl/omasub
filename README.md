@@ -316,3 +316,7 @@ Every controller still acts on one player and one queue.
 Run your server. Own your files. Choose your agents. Keep the history. Omasub is
 built for a music collection that cannot be repriced, revoked, or optimized
 against you.
+
+## WEAZL and WE4ZL branding
+
+Forking or reusing code does not grant permission to brand or market your own product with the WEAZL™ or WE4ZL™ wordmarks or the weazl head logo. See the [trademark and artwork notice](TRADEMARKS.md).
